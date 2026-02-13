@@ -2,7 +2,7 @@ import logging
 import asyncio
 import os
 from threading import Thread
-from flask import Flask, request
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     ApplicationBuilder,
@@ -15,16 +15,27 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 
-# ================= কনফিগারেশন =================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-PORT = int(os.environ.get("PORT", 10000))
+# ================= Keep-Alive Flask Server =================
+app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "Bot is running successfully!"
+
+def run():
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# ================= CONFIG =================
+BOT_TOKEN = os.getenv("BOT_TOKEN") or "8511299158:AAHJL-7NTPcc0Dt4rGt3ixHcpOwUGAQ1lQA"
 ADMIN_ID = 7406442919  
 REQUIRED_CHANNEL_ID = "-1001481593780"
 
 LINK_REGISTRATION = "https://bit.ly/BLACK220" 
-PROMO_CODE = "BLACK220" 
+PROMO_CODE = "BLACK220"
 
 CHANNEL_INVITE_LINK = "https://t.me/+3U0nMzWs4Aw0YjFl"
 ADMIN_USER_LINK = "https://t.me/SUNNY_BRO1"
@@ -35,7 +46,7 @@ IMG_CHOOSE_PLATFORM = "https://i.ibb.co.com/NdFDsT4P/file-000000005308720880754a
 IMG_REGISTRATION = "https://i.ibb.co.com/NdFDsT4P/file-000000005308720880754a5daa131c74.png"
 FINAL_IMAGE_URL = "https://i.ibb.co.com/vxfM0vv5/file-00000000f15071fa8c883abb1421fa69.png"
 
-WEBAPP_URL = "https://1xbet-melbet-apple.unaux.com/"
+WEBAPP_URL = os.getenv("WEBAPP_URL") or "https://1xbet-melbet-apple.unaux.com/"
 
 USER_FILE = "users.txt"
 
@@ -86,9 +97,11 @@ TEXTS = {
     }
 }
 
+# ================= STATES =================
 CHECK_JOIN, SELECT_LANGUAGE, CHOOSE_PLATFORM, WAITING_FOR_ID = range(4)
 ADMIN_MENU, ADMIN_GET_CONTENT, ADMIN_GET_LINK, ADMIN_GET_BTN_NAME, ADMIN_CONFIRM = range(10, 15)
 
+# ================= Logging =================
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 def save_user(user_id):
@@ -109,14 +122,34 @@ async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except BadRequest: return False
     except Exception: return False
 
-# =========================
-# (user handlers, admin panel, conversation handlers সব আগের কোড এখানে থাকবে ঠিক যেমন আপনি পাঠিয়েছেন)
-# =========================
+# ================= USER HANDLERS =================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    save_user(user.id)
+    
+    if not await check_membership(update, context):
+        keyboard = [
+            [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_INVITE_LINK)],
+            [InlineKeyboardButton("✅ I Have Joined", callback_data='check_join_status')]
+        ]
+        welcome_text = f"👋 <b>Hello {user.first_name}!</b>\nJoin our channel to use this bot."
+        try:
+            await update.message.reply_photo(photo=IMG_START, caption=welcome_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
+        except:
+            await update.message.reply_text(welcome_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
+        return CHECK_JOIN
+    
+    await show_language_menu(update, context)
+    return SELECT_LANGUAGE
 
-# Flask + Webhook start
+# ================= FLASK Keep Alive =================
+keep_alive()
+
+# ================= MAIN =================
 if __name__ == '__main__':
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Conversation Handlers
     user_conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -142,26 +175,5 @@ if __name__ == '__main__':
 
     application.add_handler(admin_conv)
     application.add_handler(user_conv)
-
-    app = Flask(__name__)
-
-    @app.route(f"/{BOT_TOKEN}", methods=["POST"])
-    async def telegram_webhook():
-        data = request.get_json(force=True)
-        update = Update.de_json(data, application.bot)
-        await application.process_update(update)
-        return "ok"
-
-    @app.route("/")
-    def home():
-        return "Bot is running with Webhook!"
-
-    async def setup():
-        await application.initialize()
-        await application.bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
-        await application.start()
-
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(setup())
-
-    app.run(host="0.0.0.0", port=PORT)
+    print("Bot Started Successfully!")
+    application.run_polling()
