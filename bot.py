@@ -16,7 +16,7 @@ from telegram.ext import (
 from telegram.error import BadRequest
 
 # ================= কনফিগারেশন =================
-BOT_TOKEN = os.getenv("8511299158:AAHJL-7NTPcc0Dt4rGt3ixHcpOwUGAQ1lQA")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.environ.get("PORT", 10000))
 
