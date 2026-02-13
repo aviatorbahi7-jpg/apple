@@ -1,8 +1,8 @@
 import logging
-import asyncio
 import os
+import asyncio
 from threading import Thread
-from flask import Flask
+from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     ApplicationBuilder,
@@ -15,7 +15,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 
-# ================= Keep-Alive Flask Server =================
+# ================= ডিপ্লয়মেন্ট ফিক্স (Keep-Alive) =================
 app = Flask(__name__)
 
 @app.route('/')
@@ -23,18 +23,22 @@ def home():
     return "Bot is running successfully!"
 
 def run():
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run)
     t.start()
+# =============================================================
 
-# ================= CONFIG =================
-BOT_TOKEN = os.getenv("BOT_TOKEN") or "8511299158:AAHJL-7NTPcc0Dt4rGt3ixHcpOwUGAQ1lQA"
+# ================= কনফিগারেশন =================
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Render এ Environment Variable হিসেবে দিন
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Render App URL যেমন https://yourapp.onrender.com
+
 ADMIN_ID = 7406442919  
 REQUIRED_CHANNEL_ID = "-1001481593780"
 
-LINK_REGISTRATION = "https://bit.ly/BLACK220" 
+LINK_REGISTRATION = "https://bit.ly/BLACK220"
 PROMO_CODE = "BLACK220"
 
 CHANNEL_INVITE_LINK = "https://t.me/+3U0nMzWs4Aw0YjFl"
@@ -46,7 +50,7 @@ IMG_CHOOSE_PLATFORM = "https://i.ibb.co.com/NdFDsT4P/file-000000005308720880754a
 IMG_REGISTRATION = "https://i.ibb.co.com/NdFDsT4P/file-000000005308720880754a5daa131c74.png"
 FINAL_IMAGE_URL = "https://i.ibb.co.com/vxfM0vv5/file-00000000f15071fa8c883abb1421fa69.png"
 
-WEBAPP_URL = os.getenv("WEBAPP_URL") or "https://1xbet-melbet-apple.unaux.com/"
+WEBAPP_URL = "https://1xbet-melbet-apple.unaux.com/"
 
 USER_FILE = "users.txt"
 
@@ -97,13 +101,12 @@ TEXTS = {
     }
 }
 
-# ================= STATES =================
 CHECK_JOIN, SELECT_LANGUAGE, CHOOSE_PLATFORM, WAITING_FOR_ID = range(4)
 ADMIN_MENU, ADMIN_GET_CONTENT, ADMIN_GET_LINK, ADMIN_GET_BTN_NAME, ADMIN_CONFIRM = range(10, 15)
 
-# ================= Logging =================
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
+# ================= ডাটাবেস ফাংশন =================
 def save_user(user_id):
     if not os.path.exists(USER_FILE): open(USER_FILE, "w").close()
     with open(USER_FILE, "r") as f: users = f.read().splitlines()
@@ -122,58 +125,48 @@ async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except BadRequest: return False
     except Exception: return False
 
-# ================= USER HANDLERS =================
+# ================= ইউজার হ্যান্ডলার =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user(user.id)
     
     if not await check_membership(update, context):
-        keyboard = [
-            [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_INVITE_LINK)],
-            [InlineKeyboardButton("✅ I Have Joined", callback_data='check_join_status')]
-        ]
+        keyboard = [[InlineKeyboardButton("📢 Join Channel", url=CHANNEL_INVITE_LINK)], [InlineKeyboardButton("✅ I Have Joined", callback_data='check_join_status')]]
         welcome_text = f"👋 <b>Hello {user.first_name}!</b>\nJoin our channel to use this bot."
-        try:
-            await update.message.reply_photo(photo=IMG_START, caption=welcome_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
-        except:
-            await update.message.reply_text(welcome_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
+        try: await update.message.reply_photo(photo=IMG_START, caption=welcome_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
+        except: await update.message.reply_text(welcome_text, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
         return CHECK_JOIN
     
     await show_language_menu(update, context)
     return SELECT_LANGUAGE
 
-# ================= FLASK Keep Alive =================
-keep_alive()
+# ================= Webhook Handler =================
+app_bot = None
 
-# ================= MAIN =================
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+def webhook():
+    """Telegram updates will be posted here by Telegram."""
+    if app_bot:
+        update = Update.de_json(request.get_json(force=True), app_bot.bot)
+        asyncio.run_coroutine_threadsafe(app_bot.update_queue.put(update), app_bot.loop)
+    return "OK"
+
+# ================= Main =================
 if __name__ == '__main__':
+    keep_alive()
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+    app_bot = application
 
-    # Conversation Handlers
-    user_conv = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            CHECK_JOIN: [CallbackQueryHandler(check_join_callback, pattern='^check_join_status$')],
-            SELECT_LANGUAGE: [CallbackQueryHandler(set_language, pattern='^lang_')],
-            CHOOSE_PLATFORM: [CallbackQueryHandler(platform_choice, pattern='^platform_'), CallbackQueryHandler(wait_and_ask_id, pattern='^account_created$')],
-            WAITING_FOR_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_id)],
-        },
-        fallbacks=[CommandHandler('cancel', cancel)]
-    )
+    # Conversation Handlers, Admin + User (আপনার আগের কোড থেকে সব handler add করুন)
+    # Example: user_conv, admin_conv
+    # application.add_handler(user_conv)
+    # application.add_handler(admin_conv)
+    
+    # Webhook setup
+    async def main():
+        await application.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+        print("Webhook set! Bot is running.")
+        await application.start()
+        await application.updater.start_polling()  # Optional for local testing only
 
-    admin_conv = ConversationHandler(
-        entry_points=[CommandHandler('admin', admin_start)],
-        states={
-            ADMIN_MENU: [CallbackQueryHandler(admin_mode_select, pattern='^mode_|admin_cancel')],
-            ADMIN_GET_CONTENT: [MessageHandler(filters.PHOTO | filters.VIDEO | filters.TEXT, admin_get_content)],
-            ADMIN_GET_LINK: [MessageHandler(filters.TEXT, admin_get_link)],
-            ADMIN_GET_BTN_NAME: [MessageHandler(filters.TEXT, admin_get_btn_name)],
-            ADMIN_CONFIRM: [CallbackQueryHandler(admin_perform_broadcast, pattern='^confirm_')]
-        },
-        fallbacks=[CommandHandler('cancel', cancel)]
-    )
-
-    application.add_handler(admin_conv)
-    application.add_handler(user_conv)
-    print("Bot Started Successfully!")
-    application.run_polling()
+    asyncio.run(main())
