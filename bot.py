@@ -17,7 +17,7 @@ from telegram.error import BadRequest
 
 # ================= কনফিগারেশন =================
 BOT_TOKEN = os.getenv("8511299158:AAHJL-7NTPcc0Dt4rGt3ixHcpOwUGAQ1lQA")
-WEBHOOK_URL = os.getenv("https://signaapplel_bot.render.com/")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.environ.get("PORT", 10000))
 
 ADMIN_ID = 7406442919  
